@@ -1,5 +1,7 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/((?!api|svg-editor2\\.html|src|_next|favicon\\.ico).*)", "destination": "/svg-editor2.html" }
+    { "source": "/", "destination": "/svg-editor2.html" }
   ]
 }

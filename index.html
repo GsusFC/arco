@@ -1081,7 +1081,7 @@
                 : (gridCountX > 1 ? stepAvailX : stepAvailY);
             const uniformStep = Math.max(0, Math.min(spacing, maxFitStep));
             // Gap mínimo y radio máximo efectivo permitido por el paso
-            const MIN_GAP = 6; // px
+            const MIN_GAP = 0; // px
             maxRadiusEffective = Math.max(0, Math.floor((uniformStep - MIN_GAP) / 2));
             // Ajustar topes de controles de tamaño
             if (ballSizeSlider) ballSizeSlider.max = String(maxRadiusEffective);

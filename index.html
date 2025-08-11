@@ -1693,12 +1693,14 @@ connectionInput.addEventListener('input', (event) => {
                         circle.radius = newRadius;
                     });
                     updateBallSizeDisplay();
+                    try { saveSnapshot(); } catch (_) {}
                 } else {
                     const newRadius = Math.max(0, Math.min(maxRadiusEffective, hoveredCircle.radius + delta * 3));
                     hoveredCircle.radius = newRadius;
                     if (hoveredCircle.isSelected) {
                         updateBallSizeDisplay();
                     }
+                    try { saveSnapshot(); } catch (_) {}
                 }
                 draw();
                 return;
@@ -1834,6 +1836,7 @@ connectionInput.addEventListener('input', (event) => {
                         isBlocked: false
                     });
                     applyBlockedToConnections();
+                    try { saveSnapshot(); } catch (_) {}
                 }
             }
             draggingFrom = null;
@@ -1855,6 +1858,7 @@ connectionInput.addEventListener('input', (event) => {
             if (!contextShapeApplyList || contextShapeApplyList.length === 0) return;
             contextShapeApplyList.forEach(c => { c.shape = shape; });
             saveShapesLocal();
+            try { saveSnapshot(); } catch (_) {}
             updateSelectedInfo();
             draw();
             if (contextMenu) contextMenu.style.display = 'none';
@@ -1904,6 +1908,7 @@ connectionInput.addEventListener('input', (event) => {
                 selectedConnections = [];
                 applyBlockedToConnections();
                 maybeSaveBlockedLocal();
+                try { saveSnapshot(); } catch (_) {}
                 updateSelectedInfo();
                 draw();
                 if (contextMenu) contextMenu.style.display = 'none';

@@ -1372,7 +1372,11 @@ connectionInput.addEventListener('input', (event) => {
         });
         
         document.getElementById('resetAll').addEventListener('click', () => {
+            // Reset completo: formas, variables globales y persistencia
+            
+            // 1. Resetear formas a circle y limpiar localStorage
             circles.forEach(circle => {
+                circle.shape = 'circle'; // Forzar todas las formas a círculo
                 const restore = Math.min(baseRadius, maxRadiusEffective);
                 if (diamondMask && isOutsideDiamond(circle)) {
                     circle.radius = 0;
@@ -1381,9 +1385,41 @@ connectionInput.addEventListener('input', (event) => {
                 }
                 circle.isSelected = false;
             });
+            
+            // 2. Limpiar persistencia de formas para este grid
+            try {
+                const key = `metaballs-shapes-${gridCountX}x${gridCountY}`;
+                localStorage.removeItem(key);
+            } catch (_) {}
+            
+            // 3. Resetear variables globales a valores iniciales
+            connectionFactor = 4.0;
+            bridgeWidth = 2.4;
+            diamondMask = false;
+            connectionFactorMode = 'global';
+            
+            // 4. Actualizar controles UI a valores iniciales
+            const cfSlider = document.getElementById('connectionSlider');
+            const cfInput = document.getElementById('connectionInput');
+            const bwSlider = document.getElementById('bridgeWidthSlider');
+            const bwInput = document.getElementById('bridgeWidthInput');
+            const dmToggle = document.getElementById('diamondMaskToggle');
+            const gmBtn = document.getElementById('globalMode');
+            const imBtn = document.getElementById('individualMode');
+            
+            if (cfSlider) cfSlider.value = String(connectionFactor);
+            if (cfInput) cfInput.value = String(connectionFactor);
+            if (bwSlider) bwSlider.value = String(bridgeWidth);
+            if (bwInput) bwInput.value = String(bridgeWidth);
+            if (dmToggle) dmToggle.checked = false;
+            if (gmBtn) gmBtn.classList.add('active');
+            if (imBtn) imBtn.classList.remove('active');
+            
+            // 5. Limpiar selecciones y conexiones
             selectedCircles = [];
             connections = [];
             connectingFrom = null;
+            
             updateDisplays();
             draw();
             try { saveSnapshot(); } catch (_) {}
@@ -1707,6 +1743,9 @@ connectionInput.addEventListener('input', (event) => {
         
         // Drag-to-connect y selección por marquee
         svg.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) {
+                return;
+            }
             const rect = svg.getBoundingClientRect();
             const mouseX = event.clientX - rect.left;
             const mouseY = event.clientY - rect.top;
@@ -1819,6 +1858,11 @@ connectionInput.addEventListener('input', (event) => {
             const hasConnSel = selectedConnections.length > 0;
             if (!hasCircle && !hasConnSel) return;
             event.preventDefault();
+
+            suppressNextClick = true;
+            draggingFrom = null;
+            isDraggingConnect = false;
+            connectingFrom = null;
 
             contextTargetCircle = targetCircle;
             contextShapeApplyList = [];

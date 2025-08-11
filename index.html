@@ -76,6 +76,38 @@
             font-weight: bold;
         }
         
+        /* Terminal input style */
+        .terminal-input {
+            background: #000000;
+            border: 1px solid #ffffff;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 4px 6px;
+            text-align: center;
+        }
+        
+        .terminal-input:focus {
+            outline: none;
+            border-color: #00ff00;
+        }
+        
+        /* Terminal button style */
+        .terminal-button {
+            background: #000000;
+            border: 1px solid #ffffff;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .terminal-button:hover {
+            background: #333333;
+        }
+        
         /* Botones */
         .btn {
             padding: 8px 12px;
@@ -255,26 +287,17 @@
 
 
 
-        <!-- Snap-to-Grid -->
-        <section class="flex flex-col gap-2 border-b border-white/20 pb-3">
-            <h2 class="text-xs font-bold uppercase tracking-wide text-cyan-400">Snap-to-Grid</h2>
-            <div class="flex items-center justify-between">
-                <label class="flex items-center gap-2 text-xs">
-                    <input id="snapToGridToggle" type="checkbox" class="terminal-checkbox" aria-label="Activar snap-to-grid" />
-                    <span>Snap-to-Grid (G)</span>
-                </label>
-                <span id="snapIndicator" class="text-xs text-cyan-400" style="display:none;">🧲 ON</span>
-            </div>
-        </section>
+
 
         <!-- Presets -->
         <section class="flex flex-col gap-2 border-b border-white/20 pb-3">
-            <h2 class="text-xs font-bold uppercase tracking-wide text-orange-400">Presets</h2>
-            <div class="flex gap-2">
-                <button id="savePreset" class="btn flex-1 border-orange-400 text-orange-400 uppercase font-semibold text-xs px-3 py-1 rounded border transition focus:outline-none focus:ring-2 focus:ring-orange-400">💾 GUARDAR</button>
-                <button id="loadPreset" class="btn flex-1 border-orange-400 text-orange-400 uppercase font-semibold text-xs px-3 py-1 rounded border transition focus:outline-none focus:ring-2 focus:ring-orange-400">📂 CARGAR</button>
+            <h2 class="text-xs font-bold uppercase tracking-wide text-yellow-400">Presets</h2>
+            <div class="flex items-center gap-2">
+                <input id="presetName" type="text" class="terminal-input w-32" placeholder="Nombre" />
+                <button id="savePreset" class="terminal-button">Guardar</button>
+                <button id="loadPreset" class="terminal-button">Abrir</button>
             </div>
-            <div id="presetsList" class="flex flex-col gap-1 max-h-32 overflow-y-auto" style="display:none;"></div>
+            <div id="presetsList" class="text-xs" style="display:none;"></div>
         </section>
 
         <!-- Acciones -->
@@ -491,7 +514,8 @@
         // Historial y presets: variables y estado
         let history = [];
         let currentHistoryIndex = -1;
-        let snapToGrid = false; // Snap-to-grid activo o no
+        // Variables para presets
+        let presetName = '';
         
         // Displays básicos
         function updateDisplays() {
@@ -603,10 +627,7 @@
             if (redoBtn) redoBtn.disabled = !(currentHistoryIndex < history.length - 1);
             if (historyCount) historyCount.textContent = `${currentHistoryIndex + 1}/${history.length}`;
         }
-        function updateSnapIndicator() {
-            const indicator = document.getElementById('snapIndicator');
-            if (indicator) indicator.style.display = snapToGrid ? 'block' : 'none';
-        }
+
         function togglePresetsList() {
             const presetsList = document.getElementById('presetsList');
             if (!presetsList) return;
@@ -626,8 +647,7 @@
                 div.appendChild(nameSpan); div.appendChild(deleteBtn); presetsList.appendChild(div);
             });
         }
-        function savePreset() {
-            const name = prompt('Nombre del preset:');
+        function savePreset(name) {
             if (!name || !name.trim()) return;
             const snapshot = createSnapshot();
             if (!snapshot || !window?.Services?.Persist?.savePreset) return;
@@ -1458,14 +1478,6 @@ connectionInput.addEventListener('input', (event) => {
                 draw();
             }
 
-            // Toggle Snap-to-Grid con "G" si no se está escribiendo
-            const tagG = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
-            const typingG = tagG === 'input' || tagG === 'textarea' || (event.target && event.target.isContentEditable === true);
-            if (!typingG && (event.code === 'KeyG' || event.key === 'g' || event.key === 'G')) {
-                snapToGrid = !snapToGrid;
-                try { updateSnapIndicator(); } catch (_) {}
-            }
-
             // Quick wins: [ y ] para espaciado (Shift = pasos grandes)
             const tagS = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
             const typingS = tagS === 'input' || tagS === 'textarea' || (event.target && event.target.isContentEditable === true);
@@ -1878,11 +1890,7 @@ connectionInput.addEventListener('input', (event) => {
         const redoEl = document.getElementById('redoAction');
         if (redoEl) redoEl.addEventListener('click', () => { try { redo(); } catch (_) {} });
 
-        // Event listener para snap-to-grid toggle
-        document.getElementById('snapToGridToggle').addEventListener('change', (e) => {
-            snapToGrid = e.target.checked;
-            updateSnapIndicator();
-        });
+
 
         // Event listeners para presets
         document.getElementById('savePreset').addEventListener('click', () => { try { savePreset(); } catch (_) {} });

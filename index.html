@@ -540,14 +540,25 @@
         }
         function updateBallSizeDisplay() {
             const indicator = document.getElementById('ballSizeIndicator');
+            if (!indicator) return;
+
             if (selectedCircles.length > 0) {
-                const totalRadius = selectedCircles.reduce((sum, circle) => sum + circle.radius, 0);
-                const avgRadius = Math.round(totalRadius / selectedCircles.length);
-                if (indicator) {
-                    indicator.textContent = selectedCircles.length === 1 ? `${avgRadius}` : `${avgRadius} (avg)`;
+                const maxEff = Math.max(1, Number(maxRadiusEffective) || 1);
+
+                if (selectedCircles.length === 1) {
+                    const c = selectedCircles[0];
+                    const pct = Math.round(Math.max(0, Math.min(100, (c.radius / maxEff) * 100)));
+                    indicator.textContent = `${pct}%`;
+                } else {
+                    const totalPct = selectedCircles.reduce((sum, c) => {
+                        const p = Math.round(Math.max(0, Math.min(100, (c.radius / maxEff) * 100)));
+                        return sum + p;
+                    }, 0);
+                    const avgPct = Math.round(totalPct / selectedCircles.length);
+                    indicator.textContent = `${avgPct}% (avg)`;
                 }
             } else {
-                if (indicator) indicator.textContent = '-';
+                indicator.textContent = '-';
             }
         }
         // Máscara Rombo (distancia Manhattan). Helpers independientes del flag.

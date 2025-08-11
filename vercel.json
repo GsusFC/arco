@@ -1,7 +1,4 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/", "destination": "/svg-editor2.html" }
-  ]
+  "outputDirectory": "dist"
 }

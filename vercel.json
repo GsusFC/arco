@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/svg-editor2.html" }
+    { "source": "/((?!api|svg-editor2\\.html|src|_next|favicon\\.ico).*)", "destination": "/svg-editor2.html" }
   ]
 }

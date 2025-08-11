@@ -1,0 +1,1 @@
+{"root":["./src/legacy-bridge.ts","./src/main.ts","./src/service-bridge.ts","./src/core/metaballs.ts","./src/model/circle.ts","./src/renderer/circles.ts","./src/renderer/connections.ts","./src/services/export.ts","./src/services/persist.ts","./src/types/circle.ts","./src/types/connection.ts","./src/utils/constants.ts"],"version":"5.9.2"}

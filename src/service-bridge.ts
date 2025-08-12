@@ -1,6 +1,7 @@
 import { connectCirclesKuckir as kuckir } from './core/metaballs';
 import * as Persist from './services/persist';
 import * as Exporter from './services/export';
+import * as Constants from './utils/constants';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const w = window as any;
@@ -10,6 +11,10 @@ w.Metaballs.connectCirclesKuckir = kuckir;
 w.Services = w.Services || {};
 w.Services.Persist = Persist;
 w.Services.Exporter = Exporter;
+
+// Constants bridge - NUEVO
+w.Constants = w.Constants || {};
+Object.assign(w.Constants, Constants);
 
 // Renderer bridge (exponer renderConnections y renderCircles)
 import * as RendererConnections from './renderer/connections';

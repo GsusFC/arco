@@ -8,6 +8,15 @@ export interface MetaballResult {
 
 // Adaptación de connectCirclesKuckir a módulo puro
 // Nota: bridgeWidth y connectionFactor ahora son parámetros
+import { 
+  CONNECTION_INFLUENCE_DIVISOR,
+  CONNECTION_RADIUS_BASE, 
+  CONNECTION_RADIUS_INFLUENCE,
+  HALF_PI,
+  OVERLAY_WIDTH_MIN,
+  OVERLAY_WIDTH_FACTOR
+} from '../utils/constants';
+
 export function connectCirclesKuckir(
   c1: Circle,
   c2: Circle,
@@ -34,6 +43,7 @@ export function connectCirclesKuckir(
   const u2 = Math.acos(clamp((r2*r2 + d*d - r1*r1) / (2 * r2 * d), -1, 1));
   if (!Number.isFinite(u1) || !Number.isFinite(u2)) return;
 
+  // Usar constantes centralizadas
   const angle1 = angleBetweenCenters + u1 + (maxSpread - u1) * v;
   const angle2 = angleBetweenCenters - (u1 + (maxSpread - u1) * v);
   const angle3 = angleBetweenCenters + Math.PI - u2 - (Math.PI - u2 - maxSpread) * v;
@@ -74,6 +84,14 @@ export function connectCirclesKuckir(
     'Z'
   ].join(' ');
 
-  const overlayWidth = Math.max(12, (r1 + r2) * 0.3);
+  // Usar constantes centralizadas para overlay
+  const overlayWidth = Math.max(OVERLAY_WIDTH_MIN, (r1 + r2) * OVERLAY_WIDTH_FACTOR);
+  const overlayPath = [
+    `M ${p1.x} ${p1.y}`,
+    `C ${h1.x} ${h1.y} ${h3.x} ${h3.y} ${p3.x} ${p3.y}`,
+    `C ${h4.x} ${h4.y} ${h2.x} ${h2.y} ${p2.x} ${p2.y}`,
+    'Z'
+  ].join(' ');
+
   return { pathData, overlayWidth };
 }

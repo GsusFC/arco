@@ -255,7 +255,7 @@
     <input id="bridgeWidthInput" type="number" min="1.0" max="4.0" step="0.1" class="w-16 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-pink-400" aria-label="Grosor del puente" />
 </div>
 <span id="connectionsCount" class="text-xs text-green-400"></span>
-            <div class="mt-1 flex flex-col gap-1">
+            <div class="mt-1 flex flex-col gap-1" style="display: none;">
                 <label class="flex items-center gap-2 text-xs">
                     <input id="persistBlockedLocalToggle" type="checkbox" class="terminal-checkbox" aria-label="Persistir bloqueos en localStorage" />
                     <span>Persist blocked (Local)</span>
@@ -278,12 +278,12 @@
         <span class="text-xs">×</span>
         <label class="text-xs">Cols</label>
         <input id="gridColsInput" type="number" min="3" max="12" value="5" class="w-12 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-yellow-400" aria-label="Columnas del grid" />
-        <span id="gridSizeValue" class="text-xs text-green-400 ml-2"></span>
+        <span id="gridSizeValue" class="text-xs text-green-400 ml-2" style="display: none;"></span>
     </div>
     <div class="flex items-center gap-3 mt-1">
         <label class="text-xs">Tamaño</label>
-        <input id="gridSpacingSlider" type="range" min="30" max="120" value="70" step="5" class="flex-1" />
-        <input id="gridSpacingInput" type="number" min="30" max="120" value="70" step="5" class="w-12 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-yellow-400" aria-label="Espaciado del grid" />
+        <input id="gridSpacingSlider" type="range" min="30" max="120" value="120" step="5" class="flex-1" />
+        <input id="gridSpacingInput" type="number" min="30" max="120" value="120" step="5" class="w-12 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-yellow-400" aria-label="Espaciado del grid" />
     </div>
     <div class="flex items-center gap-2 mt-1">
         <input id="diamondMaskToggle" type="checkbox" class="terminal-checkbox" aria-label="Activar máscara Rombo" />
@@ -324,7 +324,7 @@
     </div>
 
     <!-- HUD temporal de espaciado -->
-    <div id="spacingHUD">Espaciado: <span id="spacingValue">70</span></div>
+    <!-- <div id="spacingHUD">Espaciado: <span id="spacingValue">120</span></div> -->
 
     <!-- Modal de ayuda -->
     <div id="helpModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50" style="display:none;" role="dialog" aria-modal="true" aria-label="Ayuda y atajos">
@@ -374,7 +374,17 @@
     </svg>
     
     <script>
-        // Variables globales
+        // Constantes centralizadas con fallbacks
+        const DRAG_THRESHOLD_PX = window?.Constants?.DRAG_THRESHOLD_PX || 8;
+        const PREFS_KEY = window?.Constants?.PREFS_KEY || 'metaballs-prefs';
+        const PRESETS_KEY = window?.Constants?.PRESETS_KEY || 'metaballs-presets';
+        const HISTORY_KEY = window?.Constants?.HISTORY_KEY || 'metaballs-history';
+        const MAX_HISTORY_SIZE = window?.Constants?.MAX_HISTORY_SIZE || 50;
+        const GRID_SPACING_MIN = window?.Constants?.GRID_SPACING_MIN || 30;
+        const GRID_SPACING_MAX = window?.Constants?.GRID_SPACING_MAX || 120;
+        const DEFAULT_GRID_SPACING = window?.Constants?.DEFAULT_GRID_SPACING || 120;
+        
+        // Variables y estado inicial
         const svg = document.getElementById('svg');
         const svgNS = 'http://www.w3.org/2000/svg';
         
@@ -388,13 +398,12 @@
         let selectedConnections = []; // Conexiones seleccionadas para modo individual
         let connectionFactorMode = 'individual'; // 'global' | 'individual'
         let connectingFrom = null;
-        let spacing = 70;
+        let spacing = DEFAULT_GRID_SPACING;
         let draggingFrom = null;
         let isDraggingConnect = false;
         let dragStartX = 0, dragStartY = 0;
         let mouseXGlobal = 0, mouseYGlobal = 0;
         let suppressNextClick = false;
-        const DRAG_THRESHOLD_PX = 8;
         // Límite dinámico del radio para garantizar gap mínimo incluso a tamaño máximo
         let maxRadiusEffective = 100;
         // Máscara Rombo (diamond)
@@ -493,6 +502,7 @@
                 } catch (_) {}
             }
         };
+        // Defaults globales para funcionalidad (sin depender de UI)
         let persistPrefs = { local: true, export: true, diamond: false };
         const loadPersistPrefs = () => {
             if (window?.Services?.Persist?.loadPersistPrefs) {
@@ -501,7 +511,7 @@
                 if (typeof persistPrefs.diamond !== 'boolean') persistPrefs.diamond = false;
             } else {
                 try {
-                    const key = (window?.Services?.Persist?.PREFS_KEY) || 'metaballs-prefs';
+                    const key = (window?.Services?.Persist?.PREFS_KEY) || PREFS_KEY;
                     const raw = localStorage.getItem(key);
                     if (raw) {
                         const obj = JSON.parse(raw);
@@ -517,7 +527,7 @@
                 window.Services.Persist.savePersistPrefs(persistPrefs);
             } else {
                 try { 
-                    const key = (window?.Services?.Persist?.PREFS_KEY) || 'metaballs-prefs';
+                    const key = (window?.Services?.Persist?.PREFS_KEY) || PREFS_KEY;
                     localStorage.setItem(key, JSON.stringify(persistPrefs)); 
                 } catch (_) {}
             }
@@ -545,7 +555,8 @@
             const cc = document.getElementById('connectionsCount');
             if (cc) cc.textContent = txt;
             const gv = document.getElementById('gridSizeValue');
-            if (gv) gv.textContent = `${gridCountX}×${gridCountY} = ${gridCountX * gridCountY}`;
+            // Eliminado: gv.textContent display ya que está oculto
+            // if (gv) gv.textContent = `${gridCountX}×${gridCountY} = ${gridCountX * gridCountY}`;
         }
         function updateSelectedInfo() {
             if (typeof updateUIContext === 'function') updateUIContext();
@@ -555,23 +566,39 @@
             const indicator = document.getElementById('ballSizeIndicator');
             if (!indicator) return;
 
-            if (selectedCircles.length > 0) {
-                const maxEff = Math.max(1, Number(maxRadiusEffective) || 1);
+            if (selectedCircles.length === 0) {
+                indicator.value = '';
+                indicator.placeholder = '-';
+                indicator.disabled = true;
+                return;
+            }
 
-                if (selectedCircles.length === 1) {
-                    const c = selectedCircles[0];
-                    const pct = Math.round(Math.max(0, Math.min(100, (c.radius / maxEff) * 100)));
-                    indicator.textContent = `${pct}%`;
-                } else {
-                    const totalPct = selectedCircles.reduce((sum, c) => {
-                        const p = Math.round(Math.max(0, Math.min(100, (c.radius / maxEff) * 100)));
-                        return sum + p;
-                    }, 0);
-                    const avgPct = Math.round(totalPct / selectedCircles.length);
-                    indicator.textContent = `${avgPct}% (avg)`;
-                }
+            indicator.disabled = false;
+            const maxEff = Math.max(1, Number(maxRadiusEffective) || 1);
+
+            if (selectedCircles.length === 1) {
+                // Una sola bola: mostrar su valor exacto
+                const c = selectedCircles[0];
+                const pct = Math.round(Math.max(0, Math.min(100, (c.radius / maxEff) * 100)));
+                indicator.value = String(pct);
+                indicator.placeholder = '';
             } else {
-                indicator.textContent = '-';
+                // Múltiples bolas: verificar si todas tienen el mismo tamaño
+                const radii = selectedCircles.map(c => c.radius);
+                const uniqueRadii = [...new Set(radii)];
+                
+                if (uniqueRadii.length === 1) {
+                    // Todas tienen el mismo tamaño
+                    const pct = Math.round(Math.max(0, Math.min(100, (uniqueRadii[0] / maxEff) * 100)));
+                    indicator.value = String(pct);
+                    indicator.placeholder = '';
+                } else {
+                    // Tamaños diferentes: mostrar promedio como placeholder
+                    const avgRadius = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+                    const avgPct = Math.round(Math.max(0, Math.min(100, (avgRadius / maxEff) * 100)));
+                    indicator.value = '';
+                    indicator.placeholder = `~${avgPct}% (mixed)`;
+                }
             }
         }
         // Máscara Rombo (distancia Manhattan). Helpers independientes del flag.
@@ -581,8 +608,18 @@
                 history = window.Services.Persist.loadHistory();
                 currentHistoryIndex = history.length - 1;
             } else {
-                history = [];
-                currentHistoryIndex = -1;
+                try {
+                    const raw = localStorage.getItem(HISTORY_KEY);
+                    if (raw) {
+                        const arr = JSON.parse(raw);
+                        history = Array.isArray(arr) ? arr : [];
+                    } else {
+                        history = [];
+                    }
+                } catch {
+                    history = [];
+                }
+                currentHistoryIndex = history.length - 1;
             }
             updateHistoryUI();
         }
@@ -605,7 +642,18 @@
             if (currentHistoryIndex < history.length - 1) history = history.slice(0, currentHistoryIndex + 1);
             history.push(snap);
             currentHistoryIndex = history.length - 1;
-            if (window?.Services?.Persist?.saveHistory) window.Services.Persist.saveHistory(history);
+            if (window?.Services?.Persist?.saveHistory) {
+                window.Services.Persist.saveHistory(history);
+            } else {
+                try {
+                    // Limitar tamaño del historial
+                    if (history.length > MAX_HISTORY_SIZE) {
+                        history = history.slice(-MAX_HISTORY_SIZE);
+                        currentHistoryIndex = history.length - 1;
+                    }
+                    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                } catch {}
+            }
             updateHistoryUI();
         }
         function restoreSnapshot(snapshot) {
@@ -638,6 +686,8 @@
             if (diamondMask) {
                 for (const c of circles) { if (isOutsideDiamond(c)) c.radius = 0; }
             }
+            // Sincronizar controles después de restaurar snapshot
+            syncControlsWithState();
             updateDisplays();
             draw();
         }
@@ -669,7 +719,7 @@
                 presets = window.Services.Persist.loadPresets();
             } else {
                 try {
-                    const raw = localStorage.getItem('metaballs-presets');
+                    const raw = localStorage.getItem(PRESETS_KEY);
                     if (raw) {
                         const arr = JSON.parse(raw);
                         presets = Array.isArray(arr) ? arr : [];
@@ -735,12 +785,12 @@
             } else {
                 // Fallback directo a localStorage
                 try {
-                    const existing = JSON.parse(localStorage.getItem('metaballs-presets') || '[]');
+                    const existing = JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]');
                     const preset = { name: name.trim(), snapshot, created: Date.now() };
                     const index = existing.findIndex(p => p.name === preset.name);
                     if (index >= 0) existing[index] = preset;
                     else existing.push(preset);
-                    localStorage.setItem('metaballs-presets', JSON.stringify(existing));
+                    localStorage.setItem(PRESETS_KEY, JSON.stringify(existing));
                 } catch (e) {
                     alert('Error al guardar preset: ' + e.message);
                     return;
@@ -767,9 +817,9 @@
             } else {
                 // Fallback directo a localStorage
                 try {
-                    const existing = JSON.parse(localStorage.getItem('metaballs-presets') || '[]');
+                    const existing = JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]');
                     const filtered = existing.filter(p => p.name !== name);
-                    localStorage.setItem('metaballs-presets', JSON.stringify(filtered));
+                    localStorage.setItem(PRESETS_KEY, JSON.stringify(filtered));
                 } catch {}
             }
             loadPresetsUI();
@@ -1241,9 +1291,9 @@
                 }
             }
 
-            // Sincronizar toggles de persistencia
-            if (persistBlockedLocalToggle) persistBlockedLocalToggle.checked = !!persistPrefs.local;
-            if (persistBlockedExportToggle) persistBlockedExportToggle.checked = !!persistPrefs.export;
+            // Sincronizar toggles de persistencia (aunque ocultos, mantener lógica)
+            if (persistBlockedLocalToggle) persistBlockedLocalToggle.checked = true; // Forzar siempre activo
+            if (persistBlockedExportToggle) persistBlockedExportToggle.checked = true; // Forzar siempre activo
             if (diamondMaskToggle) diamondMaskToggle.checked = !!persistPrefs.diamond;
             diamondMask = !!persistPrefs.diamond;
 
@@ -1373,17 +1423,27 @@ bridgeWidthInput.addEventListener('input', (event) => {
 bridgeWidthInput.addEventListener('change', () => { try { saveSnapshot(); } catch (_) {} });
 
         
-// Persistencia de bloqueos: toggles
+// Persistencia de bloqueos: toggles (ocultos pero funcionales)
 if (persistBlockedLocalToggle) {
+    // Forzar siempre activo
+    persistPrefs.local = true;
+    persistBlockedLocalToggle.checked = true;
     persistBlockedLocalToggle.addEventListener('change', () => {
-        persistPrefs.local = !!persistBlockedLocalToggle.checked;
+        // Mantener siempre true aunque esté oculto
+        persistPrefs.local = true;
+        persistBlockedLocalToggle.checked = true;
         savePersistPrefs();
-        if (persistPrefs.local) saveBlockedLocal();
+        saveBlockedLocal(); // Siempre guardar
     });
 }
 if (persistBlockedExportToggle) {
+    // Forzar siempre activo
+    persistPrefs.export = true; 
+    persistBlockedExportToggle.checked = true;
     persistBlockedExportToggle.addEventListener('change', () => {
-        persistPrefs.export = !!persistBlockedExportToggle.checked;
+        // Mantener siempre true aunque esté oculto
+        persistPrefs.export = true;
+        persistBlockedExportToggle.checked = true;
         savePersistPrefs();
     });
 }
@@ -1574,10 +1634,16 @@ connectionInput.addEventListener('keydown', (e) => {
         const gridSpacingSlider = document.getElementById('gridSpacingSlider');
         const gridSpacingInput = document.getElementById('gridSpacingInput');
         if (gridSpacingSlider && gridSpacingInput) {
+            // Aplicar límites desde constantes
+            gridSpacingSlider.min = String(GRID_SPACING_MIN);
+            gridSpacingSlider.max = String(GRID_SPACING_MAX);
+            gridSpacingSlider.value = String(DEFAULT_GRID_SPACING);
+            gridSpacingInput.min = String(GRID_SPACING_MIN);
+            gridSpacingInput.max = String(GRID_SPACING_MAX);
+            gridSpacingInput.value = String(DEFAULT_GRID_SPACING);
+            
             const applySpacing = (val) => {
-                const min = parseInt(gridSpacingSlider.min);
-                const max = parseInt(gridSpacingSlider.max);
-                const clamped = Math.max(min, Math.min(max, val));
+                const clamped = Math.max(GRID_SPACING_MIN, Math.min(GRID_SPACING_MAX, val));
                 spacing = clamped;
                 gridSpacingSlider.value = String(clamped);
                 gridSpacingInput.value = String(clamped);
@@ -1671,15 +1737,13 @@ connectionInput.addEventListener('keydown', (e) => {
 
                 if (slider && input && (bracketLeftPressed || bracketRightPressed)) {
                     event.preventDefault();
-                    const min = parseInt(slider.min);
-                    const max = parseInt(slider.max);
                     const step = event.shiftKey ? 10 : 5;
                     const dir = bracketRightPressed ? +1 : -1;
-                    const nv = Math.max(min, Math.min(max, spacing + dir * step));
+                    const nv = Math.max(GRID_SPACING_MIN, Math.min(GRID_SPACING_MAX, spacing + dir * step));
                     spacing = nv;
                     slider.value = String(nv);
                     input.value = String(nv);
-                    showSpacingHUD(nv);
+                    // showSpacingHUD(nv); // REMOVIDO
                     // Recalcular layout para reflejar el nuevo espaciado
                     init();
                     try { saveSnapshot(); } catch (_) {}
@@ -1742,17 +1806,17 @@ connectionInput.addEventListener('keydown', (e) => {
             }
         });
         
-        // HUD para spacing
-        let spacingHUDTimeout;
-        function showSpacingHUD(value) {
-            const hud = document.getElementById('spacingHUD');
-            const valueSpan = document.getElementById('spacingValue');
-            if (!hud || !valueSpan) return;
-            valueSpan.textContent = String(value);
-            hud.classList.add('show');
-            if (spacingHUDTimeout) clearTimeout(spacingHUDTimeout);
-            spacingHUDTimeout = setTimeout(() => hud.classList.remove('show'), 1200);
-        }
+        // HUD para spacing - REMOVIDO
+        // let spacingHUDTimeout;
+        // function showSpacingHUD(value) {
+        //     const hud = document.getElementById('spacingHUD');
+        //     const valueSpan = document.getElementById('spacingValue');
+        //     if (!hud || !valueSpan) return;
+        //     valueSpan.textContent = String(value);
+        //     hud.classList.add('show');
+        //     if (spacingHUDTimeout) clearTimeout(spacingHUDTimeout);
+        //     spacingHUDTimeout = setTimeout(() => hud.classList.remove('show'), 1200);
+        // }
 
         // Scroll para control de valores
         svg.addEventListener('wheel', (event) => {
@@ -1769,14 +1833,12 @@ connectionInput.addEventListener('keydown', (e) => {
                 const slider = document.getElementById('gridSpacingSlider');
                 const input = document.getElementById('gridSpacingInput');
                 if (slider && input) {
-                    const min = parseInt(slider.min);
-                    const max = parseInt(slider.max);
                     const step = event.shiftKey ? 10 : 5;
-                    const nv = Math.max(min, Math.min(max, spacing + delta * step));
+                    const nv = Math.max(GRID_SPACING_MIN, Math.min(GRID_SPACING_MAX, spacing + delta * step));
                     spacing = nv;
                     slider.value = String(nv);
                     input.value = String(nv);
-                    showSpacingHUD(nv);
+                    // showSpacingHUD(nv); // REMOVIDO
                     try { saveSnapshot(); } catch (_) {}
                     init();
                 }
@@ -2059,6 +2121,27 @@ connectionInput.addEventListener('keydown', (e) => {
         if (ctxShapeSquare) ctxShapeSquare.addEventListener('click', () => applyShape('square'));
         if (ctxShapeSquircle) ctxShapeSquircle.addEventListener('click', () => applyShape('squircle'));
         
+        // Función para sincronizar controles con variables globales
+        function syncControlsWithState() {
+            // Sincronizar connection factor
+            if (connectionSlider) connectionSlider.value = String(connectionFactor);
+            if (connectionInput) connectionInput.value = String(connectionFactor);
+            
+            // Sincronizar bridge width  
+            if (bridgeWidthSlider) bridgeWidthSlider.value = String(bridgeWidth.toFixed(1));
+            if (bridgeWidthInput) bridgeWidthInput.value = String(bridgeWidth.toFixed(1));
+            
+            // Sincronizar grid spacing
+            if (gridSpacingSlider) gridSpacingSlider.value = String(spacing);
+            if (gridSpacingInput) gridSpacingInput.value = String(spacing);
+            
+            // Sincronizar grid size
+            const gridRowsInput = document.getElementById('gridRowsInput');
+            const gridColsInput = document.getElementById('gridColsInput');
+            if (gridRowsInput) gridRowsInput.value = String(gridCountY);
+            if (gridColsInput) gridColsInput.value = String(gridCountX);
+        }
+        
         // Función para descargar SVG
         async function downloadSVG() {
             try {
@@ -2129,6 +2212,8 @@ connectionInput.addEventListener('keydown', (e) => {
         loadPersistPrefs();
         initHistory();
         init();
+        // Sincronizar controles con estado inicial
+        syncControlsWithState();
         saveSnapshot();
         draw();
 
@@ -2261,29 +2346,34 @@ connectionInput.addEventListener('keydown', (e) => {
                 if (selectedCircles.length === 0) return;
                 const maxEff = Math.max(1, Number(maxRadiusEffective) || 1);
                 let v = Number(ballSizeInputEl.value);
-                if (Number.isNaN(v)) return;
+                if (Number.isNaN(v) || ballSizeInputEl.value.trim() === '') return;
                 v = Math.max(0, Math.min(100, v));
                 const newRadius = (v / 100) * maxEff;
                 selectedCircles.forEach(c => { c.radius = Math.max(0, Math.min(maxEff, newRadius)); });
-                updateBallSizeDisplay();
                 draw();
             });
             // Confirmar valor (snapshot) en change/Enter/blur
             const commitSnapshot = () => { try { saveSnapshot(); } catch (_) {} };
-            ballSizeInputEl.addEventListener('change', commitSnapshot);
+            ballSizeInputEl.addEventListener('change', () => {
+                updateBallSizeDisplay(); // Refrescar display después del cambio
+                commitSnapshot();
+            });
             ballSizeInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    updateBallSizeDisplay();
                     commitSnapshot();
                     ballSizeInputEl.blur();
                 }
             });
             ballSizeInputEl.addEventListener('blur', () => {
                 // Si el valor queda fuera de rango, normalizar y reflejar
-                let v = Number(ballSizeInputEl.value);
-                if (Number.isNaN(v)) v = 0;
-                v = Math.max(0, Math.min(100, v));
-                ballSizeInputEl.value = String(Math.round(v));
+                if (ballSizeInputEl.value.trim() !== '') {
+                    let v = Number(ballSizeInputEl.value);
+                    if (Number.isNaN(v)) v = 0;
+                    v = Math.max(0, Math.min(100, v));
+                    ballSizeInputEl.value = String(Math.round(v));
+                }
                 updateBallSizeDisplay();
             });
         }

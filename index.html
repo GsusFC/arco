@@ -1233,12 +1233,9 @@
         
         // Inicialización de grid y estado
         function init() {
-            // Releer grid desde inputs (si existen)
-            const rowsInput = document.getElementById('gridRowsInput');
-            const colsInput = document.getElementById('gridColsInput');
-            if (rowsInput) gridCountY = parseInt(rowsInput.value) || gridCountY;
-            if (colsInput) gridCountX = parseInt(colsInput.value) || gridCountX;
-
+            // ROBUSTEZ: NO releer desde inputs, usar variables globales como autoridad
+            // Solo syncControlsWithState() debe actualizar inputs desde variables
+            
             // Reset de estado
             circles = [];
             selectedCircles = [];
@@ -1475,41 +1472,20 @@ if (persistBlockedExportToggle) {
             });
         }
 
-// Toggle de candado de grid
+// Toggle de candado de grid - MEJORADO
 if (gridLockToggle) {
     gridLockToggle.addEventListener('change', () => {
         gridLocked = !!gridLockToggle.checked;
-        
-        // Cambiar estilo visual de inputs cuando están bloqueados
-        const gridRowsInput = document.getElementById('gridRowsInput');
-        const gridColsInput = document.getElementById('gridColsInput');
-        const gridSpacingSlider = document.getElementById('gridSpacingSlider');
-        const gridSpacingInput = document.getElementById('gridSpacingInput');
-        
-        const elements = [gridRowsInput, gridColsInput, gridSpacingSlider, gridSpacingInput];
-        elements.forEach(el => {
-            if (el) {
-                if (gridLocked) {
-                    el.style.opacity = '0.5';
-                    el.style.cursor = 'not-allowed';
-                    if (el.type === 'number') {
-                        el.setAttribute('readonly', 'true');
-                    } else if (el.type === 'range') {
-                        el.style.pointerEvents = 'none';
-                    }
-                } else {
-                    el.style.opacity = '1';
-                    el.style.cursor = '';
-                    if (el.type === 'number') {
-                        el.removeAttribute('readonly');
-                    } else if (el.type === 'range') {
-                        el.style.pointerEvents = '';
-                    }
-                }
-            }
-        });
-        
+        persistPrefs.gridLock = gridLocked;
         savePersistPrefs();
+        
+        // Aplicar estilos visuales
+        applyGridLockStyles();
+        
+        // Si se desbloquea, asegurar sincronización
+        if (!gridLocked) {
+            syncControlsWithState();
+        }
     });
 }
 
@@ -1628,12 +1604,17 @@ connectionInput.addEventListener('keydown', (e) => {
             try { saveSnapshot(); } catch (_) {}
         });
         
-        // Event listeners para grid size
+        // Event listeners para grid size - MÁS ROBUSTO
         ['gridRowsInput', 'gridColsInput'].forEach(id => {
             const el = document.getElementById(id);
+            if (!el) return;
+            
             el.addEventListener('input', (event) => {
                 if (gridLocked) {
                     event.preventDefault();
+                    // Restaurar valor desde variable global
+                    if (id === 'gridRowsInput') el.value = String(gridCountY);
+                    else el.value = String(gridCountX);
                     return;
                 }
                 const newValue = parseInt(event.target.value);
@@ -1641,12 +1622,16 @@ connectionInput.addEventListener('keydown', (e) => {
                     if (id === 'gridRowsInput') gridCountY = newValue;
                     else gridCountX = newValue;
                     init();
+                    // Asegurar sincronización tras cambio
+                    syncControlsWithState();
                 }
             });
+            
             el.addEventListener('change', () => { 
                 if (gridLocked) return;
                 try { saveSnapshot(); } catch (_) {} 
             });
+            
             el.addEventListener('keydown', (e) => {
                 if (gridLocked && e.key !== 'Tab' && e.key !== 'Escape') {
                     e.preventDefault();
@@ -1657,8 +1642,14 @@ connectionInput.addEventListener('keydown', (e) => {
                     el.blur();
                 }
             });
+            
             el.addEventListener('blur', () => {
-                if (gridLocked) return;
+                if (gridLocked) {
+                    // Restaurar valor correcto si estaba bloqueado
+                    if (id === 'gridRowsInput') el.value = String(gridCountY);
+                    else el.value = String(gridCountX);
+                    return;
+                }
                 let v = parseInt(el.value);
                 if (Number.isNaN(v)) v = 5;
                 v = Math.max(3, Math.min(12, v));
@@ -1666,9 +1657,11 @@ connectionInput.addEventListener('keydown', (e) => {
                 if (id === 'gridRowsInput' && gridCountY !== v) {
                     gridCountY = v;
                     init();
+                    syncControlsWithState();
                 } else if (id === 'gridColsInput' && gridCountX !== v) {
                     gridCountX = v;
                     init();
+                    syncControlsWithState();
                 }
             });
         });
@@ -2184,11 +2177,47 @@ connectionInput.addEventListener('keydown', (e) => {
             if (gridSpacingSlider) gridSpacingSlider.value = String(spacing);
             if (gridSpacingInput) gridSpacingInput.value = String(spacing);
             
-            // Sincronizar grid size
+            // Sincronizar grid size - SIEMPRE desde variables globales
             const gridRowsInput = document.getElementById('gridRowsInput');
             const gridColsInput = document.getElementById('gridColsInput');
             if (gridRowsInput) gridRowsInput.value = String(gridCountY);
             if (gridColsInput) gridColsInput.value = String(gridCountX);
+            
+            // Aplicar estado visual del candado si está activo
+            if (gridLocked) {
+                applyGridLockStyles();
+            }
+        }
+        
+        // Función para aplicar estilos del candado
+        function applyGridLockStyles() {
+            const gridRowsInput = document.getElementById('gridRowsInput');
+            const gridColsInput = document.getElementById('gridColsInput');
+            const gridSpacingSlider = document.getElementById('gridSpacingSlider');
+            const gridSpacingInput = document.getElementById('gridSpacingInput');
+            
+            const elements = [gridRowsInput, gridColsInput, gridSpacingSlider, gridSpacingInput];
+            elements.forEach(el => {
+                if (el) {
+                    if (gridLocked) {
+                        el.style.opacity = '0.5';
+                        el.style.cursor = 'not-allowed';
+                        if (el.type === 'number') {
+                            el.setAttribute('readonly', 'true');
+                        } else if (el.type === 'range') {
+                            el.style.pointerEvents = 'none';
+                        }
+                    } else {
+                        el.style.opacity = '1';
+                        el.style.cursor = '';
+                        if (el.type === 'number') {
+                            el.removeAttribute('readonly');
+                        } else if (el.type === 'range') {
+                            el.style.pointerEvents = '';
+                        }
+                    }
+                }
+            });
         }
         
         // Función para descargar SVG
@@ -2257,20 +2286,24 @@ connectionInput.addEventListener('keydown', (e) => {
             init();
         });
         
-        // Cargar preferencias y luego inicializar
+        // Cargar preferencias y luego inicializar - MEJORADO
         loadPersistPrefs();
         initHistory();
+        
+        // Establecer estado inicial del grid lock ANTES de init
+        if (gridLockToggle && persistPrefs.gridLock) {
+            gridLocked = true;
+            gridLockToggle.checked = true;
+        }
+        
         init();
-        // Sincronizar controles con estado inicial
+        
+        // Sincronizar controles con estado inicial DESPUÉS de init
         syncControlsWithState();
         
-        // Aplicar estado inicial del grid lock
-        if (gridLockToggle) {
-            gridLocked = !!gridLockToggle.checked;
-            // Trigger del change event para aplicar estilos iniciales
-            if (gridLocked) {
-                gridLockToggle.dispatchEvent(new Event('change'));
-            }
+        // Aplicar estado visual del grid lock DESPUÉS de syncControls
+        if (gridLocked) {
+            applyGridLockStyles();
         }
         
         saveSnapshot();

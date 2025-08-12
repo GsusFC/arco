@@ -227,22 +227,28 @@
             <h2 class="text-xs font-bold uppercase tracking-wide text-blue-400">Bola seleccionada</h2>
             <div class="flex items-center justify-between">
                 <span class="text-xs">Tamaño:</span>
-                <span id="ballSizeIndicator" class="text-sm font-mono text-green-400 bg-black/50 px-2 py-1 rounded border border-green-400/30">-</span>
+                <input
+                  id="ballSizeIndicator"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  inputmode="numeric"
+                  class="text-sm font-mono text-green-400 bg-black/50 px-2 py-1 rounded border border-green-400/30 w-20 text-right"
+                  aria-label="Tamaño de la bola en porcentaje"
+                  placeholder="-"
+                />
             </div>
         </section>
 
         <!-- Configuración de conexiones -->
         <section id="connectionControls" class="flex flex-col gap-2 border-b border-white/20 pb-3">
             <h2 class="text-xs font-bold uppercase tracking-wide text-pink-400">Conexiones</h2>
-            <div class="flex gap-2 justify-between">
-    <button id="globalMode" class="btn uppercase font-semibold text-xs px-3 py-1 rounded border border-white transition focus:outline-none focus:ring-2 focus:ring-pink-400">GLOBAL</button>
-    <button id="individualMode" class="btn uppercase font-semibold text-xs px-3 py-1 rounded border border-white transition focus:outline-none focus:ring-2 focus:ring-pink-400">INDIVIDUAL</button>
-</div>
-<div id="connectionSliderBlock" class="flex items-center gap-3" hidden>
-    <span class="text-xs">Factor</span>
-    <input id="connectionSlider" type="range" min="0.1" max="8.0" step="0.05" class="flex-1" />
-    <input id="connectionInput" type="number" min="0.1" max="8.0" step="0.05" class="w-16 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-pink-400" aria-label="Factor de conexión" />
-</div>
+            <div id="connectionSliderBlock" class="flex items-center gap-3">
+                <span class="text-xs">Factor</span>
+                <input id="connectionSlider" type="range" min="0.1" max="8.0" step="0.05" class="flex-1" />
+                <input id="connectionInput" type="number" min="0.1" max="8.0" step="0.05" class="w-16 text-xs text-center bg-black border border-white text-white rounded focus:outline-none focus:ring-2 focus:ring-pink-400" aria-label="Factor de conexión" />
+            </div>
 <div id="bridgeWidthBlock" class="flex items-center gap-3">
     <span class="text-xs">Bridge width</span>
     <input id="bridgeWidthSlider" type="range" min="1.0" max="4.0" step="0.1" class="flex-1" />
@@ -293,7 +299,14 @@
         <section class="flex flex-col gap-2 border-b border-white/20 pb-3">
             <h2 class="text-xs font-bold uppercase tracking-wide text-yellow-400">Presets</h2>
             <div class="flex items-center gap-2">
-                <input id="presetName" type="text" class="terminal-input w-32" placeholder="Nombre" />
+                <input 
+                    id="presetName" 
+                    type="text" 
+                    class="terminal-input w-32" 
+                    placeholder="Nombre preset"
+                    maxlength="30"
+                    autocomplete="off"
+                />
                 <button id="savePreset" class="terminal-button">Guardar</button>
                 <button id="loadPreset" class="terminal-button">Abrir</button>
             </div>
@@ -373,7 +386,7 @@
         let selectedCircles = [];
         let connections = [];
         let selectedConnections = []; // Conexiones seleccionadas para modo individual
-        let connectionFactorMode = 'global'; // 'global' | 'individual'
+        let connectionFactorMode = 'individual'; // 'global' | 'individual'
         let connectingFrom = null;
         let spacing = 70;
         let draggingFrom = null;
@@ -647,22 +660,97 @@
         }
         function loadPresetsUI() {
             const presetsList = document.getElementById('presetsList');
-            if (!presetsList || !window?.Services?.Persist?.loadPresets) return;
-            const presets = window.Services.Persist.loadPresets();
+            if (!presetsList) return;
+            
+            let presets = [];
+            
+            // Intentar cargar con Services o fallback
+            if (window?.Services?.Persist?.loadPresets) {
+                presets = window.Services.Persist.loadPresets();
+            } else {
+                try {
+                    const raw = localStorage.getItem('metaballs-presets');
+                    if (raw) {
+                        const arr = JSON.parse(raw);
+                        presets = Array.isArray(arr) ? arr : [];
+                    }
+                } catch {}
+            }
+            
             presetsList.innerHTML = '';
-            if (presets.length === 0) { presetsList.innerHTML = '<div class="text-xs text-gray-400 text-center py-2">No hay presets guardados</div>'; return; }
+            if (presets.length === 0) {
+                presetsList.innerHTML = '<div class="text-xs text-gray-400 text-center py-2">No hay presets guardados</div>';
+                return;
+            }
+            
+            // Ordenar por fecha de creación (más recientes primero)
+            presets.sort((a, b) => (b.created || 0) - (a.created || 0));
+            
             presets.forEach(preset => {
-                const div = document.createElement('div'); div.className = 'flex items-center gap-1 p-1 bg-black/20 rounded';
-                const nameSpan = document.createElement('span'); nameSpan.className = 'text-xs flex-1 truncate cursor-pointer'; nameSpan.textContent = preset.name; nameSpan.title = `Cargar preset: ${preset.name}`; nameSpan.onclick = () => loadPreset(preset);
-                const deleteBtn = document.createElement('button'); deleteBtn.className = 'text-xs text-red-400 hover:text-red-300 px-1'; deleteBtn.textContent = '✕'; deleteBtn.title = 'Eliminar preset'; deleteBtn.onclick = (e) => { e.stopPropagation(); if (confirm(`¿Eliminar preset "${preset.name}"?`)) { deletePreset(preset.name); } };
-                div.appendChild(nameSpan); div.appendChild(deleteBtn); presetsList.appendChild(div);
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-1 p-1 bg-black/20 rounded hover:bg-black/40 transition-colors';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'text-xs flex-1 truncate cursor-pointer';
+                nameSpan.textContent = preset.name;
+                nameSpan.title = `Cargar preset: ${preset.name}`;
+                nameSpan.onclick = () => loadPreset(preset);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'text-xs text-red-400 hover:text-red-300 px-1';
+                deleteBtn.textContent = '✕';
+                deleteBtn.title = 'Eliminar preset';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`¿Eliminar preset "${preset.name}"?`)) {
+                        deletePreset(preset.name);
+                    }
+                };
+                
+                div.appendChild(nameSpan);
+                div.appendChild(deleteBtn);
+                presetsList.appendChild(div);
             });
         }
         function savePreset(name) {
-            if (!name || !name.trim()) return;
+            // Si no se pasa nombre, tomarlo del input
+            if (!name) {
+                const presetNameInput = document.getElementById('presetName');
+                if (!presetNameInput) return;
+                name = presetNameInput.value;
+            }
+            
+            // Validar nombre
+            if (!name || !name.trim()) {
+                alert('Por favor ingresa un nombre para el preset.');
+                return;
+            }
+            
             const snapshot = createSnapshot();
-            if (!snapshot || !window?.Services?.Persist?.savePreset) return;
-            window.Services.Persist.savePreset(name.trim(), snapshot);
+            if (!snapshot) return;
+            
+            // Fallback si Services no está disponible
+            if (window?.Services?.Persist?.savePreset) {
+                window.Services.Persist.savePreset(name.trim(), snapshot);
+            } else {
+                // Fallback directo a localStorage
+                try {
+                    const existing = JSON.parse(localStorage.getItem('metaballs-presets') || '[]');
+                    const preset = { name: name.trim(), snapshot, created: Date.now() };
+                    const index = existing.findIndex(p => p.name === preset.name);
+                    if (index >= 0) existing[index] = preset;
+                    else existing.push(preset);
+                    localStorage.setItem('metaballs-presets', JSON.stringify(existing));
+                } catch (e) {
+                    alert('Error al guardar preset: ' + e.message);
+                    return;
+                }
+            }
+            
+            // Limpiar input y actualizar UI
+            const presetNameInput = document.getElementById('presetName');
+            if (presetNameInput) presetNameInput.value = '';
+            
             loadPresetsUI();
             alert(`Preset "${name.trim()}" guardado correctamente.`);
         }
@@ -674,8 +762,16 @@
             alert(`Preset "${preset.name}" cargado correctamente.`);
         }
         function deletePreset(name) {
-            if (!window?.Services?.Persist?.deletePreset) return;
-            window.Services.Persist.deletePreset(name);
+            if (window?.Services?.Persist?.deletePreset) {
+                window.Services.Persist.deletePreset(name);
+            } else {
+                // Fallback directo a localStorage
+                try {
+                    const existing = JSON.parse(localStorage.getItem('metaballs-presets') || '[]');
+                    const filtered = existing.filter(p => p.name !== name);
+                    localStorage.setItem('metaballs-presets', JSON.stringify(filtered));
+                } catch {}
+            }
             loadPresetsUI();
         }
 
@@ -1322,6 +1418,7 @@ if (diamondMaskToggle) {
         updateBallSizeDisplay();
         updateSelectedInfo();
         draw();
+        try { saveSnapshot(); } catch (_) {}
     });
 }
 
@@ -1348,6 +1445,7 @@ connectionSlider.addEventListener('input', (event) => {
     updateDisplays();
     draw();
 });
+connectionSlider.addEventListener('change', () => { try { saveSnapshot(); } catch (_) {} });
 
 connectionInput.addEventListener('input', (event) => {
     let newFactor = parseFloat(event.target.value);
@@ -1373,6 +1471,13 @@ connectionInput.addEventListener('input', (event) => {
     }
     updateDisplays();
     draw();
+});
+connectionInput.addEventListener('change', () => { try { saveSnapshot(); } catch (_) {} });
+connectionInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        connectionInput.blur();
+    }
 });
         
         document.getElementById('clearConnections').addEventListener('click', () => {
@@ -1407,7 +1512,7 @@ connectionInput.addEventListener('input', (event) => {
             connectionFactor = 4.0;
             bridgeWidth = 2.4;
             diamondMask = false;
-            connectionFactorMode = 'global';
+            connectionFactorMode = 'individual';
             
             // 4. Actualizar controles UI a valores iniciales
             const cfSlider = document.getElementById('connectionSlider');
@@ -1415,16 +1520,12 @@ connectionInput.addEventListener('input', (event) => {
             const bwSlider = document.getElementById('bridgeWidthSlider');
             const bwInput = document.getElementById('bridgeWidthInput');
             const dmToggle = document.getElementById('diamondMaskToggle');
-            const gmBtn = document.getElementById('globalMode');
-            const imBtn = document.getElementById('individualMode');
             
             if (cfSlider) cfSlider.value = String(connectionFactor);
             if (cfInput) cfInput.value = String(connectionFactor);
             if (bwSlider) bwSlider.value = String(bridgeWidth);
             if (bwInput) bwInput.value = String(bridgeWidth);
             if (dmToggle) dmToggle.checked = false;
-            if (gmBtn) gmBtn.classList.add('active');
-            if (imBtn) imBtn.classList.remove('active');
             
             // 5. Limpiar selecciones y conexiones
             selectedCircles = [];
@@ -1438,11 +1539,32 @@ connectionInput.addEventListener('input', (event) => {
         
         // Event listeners para grid size
         ['gridRowsInput', 'gridColsInput'].forEach(id => {
-            document.getElementById(id).addEventListener('input', (event) => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', (event) => {
                 const newValue = parseInt(event.target.value);
                 if (newValue >= 3 && newValue <= 12) {
                     if (id === 'gridRowsInput') gridCountY = newValue;
                     else gridCountX = newValue;
+                    init();
+                }
+            });
+            el.addEventListener('change', () => { try { saveSnapshot(); } catch (_) {} });
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    el.blur();
+                }
+            });
+            el.addEventListener('blur', () => {
+                let v = parseInt(el.value);
+                if (Number.isNaN(v)) v = 5;
+                v = Math.max(3, Math.min(12, v));
+                el.value = String(v);
+                if (id === 'gridRowsInput' && gridCountY !== v) {
+                    gridCountY = v;
+                    init();
+                } else if (id === 'gridColsInput' && gridCountX !== v) {
+                    gridCountX = v;
                     init();
                 }
             });
@@ -1500,7 +1622,16 @@ connectionInput.addEventListener('input', (event) => {
                 // Ctrl/Cmd+S = Guardar preset
                 if (event.code === 'KeyS') {
                     event.preventDefault();
-                    try { savePreset(); } catch (_) {}
+                    const presetNameInput = document.getElementById('presetName');
+                    if (presetNameInput && presetNameInput.value.trim()) {
+                        try { savePreset(); } catch (_) {}
+                    } else {
+                        // Enfocar el input si está vacío
+                        if (presetNameInput) {
+                            presetNameInput.focus();
+                            presetNameInput.select();
+                        }
+                    }
                     return;
                 }
                 // Ctrl/Cmd+A = Select All (sin depender de editMode)
@@ -1652,63 +1783,45 @@ connectionInput.addEventListener('input', (event) => {
                 return;
             }
 
-            // Si el target es un overlay de conexión, ajustar esa conexión (independiente de modo)
-            const t = event.target;
-            if (t && t.classList && t.classList.contains('conn-overlay') && typeof t.dataset.connIndex !== 'undefined') {
-                const idx = Number(t.dataset.connIndex);
-                const slider = document.getElementById('connectionSlider');
-                const min = slider ? parseFloat(slider.min) : 0.1;
-                const max = slider ? parseFloat(slider.max) : 8.0;
-                const step = 0.1;
-                if (!Number.isNaN(idx) && connections[idx]) {
-                    const c = connections[idx];
-                    const nv = Math.max(min, Math.min(max, Number((c.connectionFactor + delta * step).toFixed(2))));
-                    c.connectionFactor = nv;
+            // Ctrl/Cmd => factor conexión
+            if (event.ctrlKey || event.metaKey) {
+                // Si el target es un overlay de conexión, ajustar esa conexión (independiente de modo)
+                const t = event.target;
+                if (t && t.classList && t.classList.contains('conn-overlay') && typeof t.dataset.connIndex !== 'undefined') {
+                    const idx = Number(t.dataset.connIndex);
+                    const slider = document.getElementById('connectionSlider');
+                    const min = slider ? parseFloat(slider.min) : 0.1;
+                    const max = slider ? parseFloat(slider.max) : 8.0;
+                    const step = 0.1;
+                    if (!Number.isNaN(idx) && connections[idx]) {
+                        const c = connections[idx];
+                        const nv = Math.max(min, Math.min(max, Number((c.connectionFactor + delta * step).toFixed(2))));
+                        c.connectionFactor = nv;
+                        updateDisplays();
+                        try { saveSnapshot(); } catch (_) {}
+                        draw();
+                        return;
+                    }
+                }
+
+                // Si hay conexiones seleccionadas y estamos en modo 'individual', ajustar todas
+                if (connectionFactorMode === 'individual' && selectedConnections.length > 0) {
+                    const slider = document.getElementById('connectionSlider');
+                    const min = slider ? parseFloat(slider.min) : 0.1;
+                    const max = slider ? parseFloat(slider.max) : 8.0;
+                    const step = 0.1;
+                    selectedConnections.forEach(c => {
+                        c.connectionFactor = Math.max(min, Math.min(max, Number((c.connectionFactor + delta * step).toFixed(2))));
+                    });
                     updateDisplays();
+                    try { saveSnapshot(); } catch (_) {}
                     draw();
                     return;
                 }
-            }
 
-            // Si hay conexiones seleccionadas y estamos en modo 'individual', ajustar todas
-            if (connectionFactorMode === 'individual' && selectedConnections.length > 0) {
+                // Fallback: ajustar factor de conexión global
                 const slider = document.getElementById('connectionSlider');
-                const min = slider ? parseFloat(slider.min) : 0.1;
-                const max = slider ? parseFloat(slider.max) : 8.0;
-                const step = 0.1;
-                selectedConnections.forEach(c => {
-                    c.connectionFactor = Math.max(min, Math.min(max, Number((c.connectionFactor + delta * step).toFixed(2))));
-                });
-                updateDisplays();
-                draw();
-                return;
-            }
-
-            // Si hay círculo en hover y (spacePressed o seleccionado): ajustar tamaño de bola
-            if (hoveredCircle && (spacePressed || hoveredCircle.isSelected)) {
-                if (selectedCircles.length > 1 && hoveredCircle.isSelected) {
-                    const deltaSize = delta * 3;
-                    selectedCircles.forEach(circle => {
-                        const newRadius = Math.max(0, Math.min(maxRadiusEffective, circle.radius + deltaSize));
-                        circle.radius = newRadius;
-                    });
-                    updateBallSizeDisplay();
-                    try { saveSnapshot(); } catch (_) {}
-                } else {
-                    const newRadius = Math.max(0, Math.min(maxRadiusEffective, hoveredCircle.radius + delta * 3));
-                    hoveredCircle.radius = newRadius;
-                    if (hoveredCircle.isSelected) {
-                        updateBallSizeDisplay();
-                    }
-                    try { saveSnapshot(); } catch (_) {}
-                }
-                draw();
-                return;
-            }
-
-            // Fallback: ajustar factor de conexión global
-            {
-                const slider = document.getElementById('connectionSlider');
+                const input = document.getElementById('connectionInput');
                 const min = slider ? parseFloat(slider.min) : 0.1;
                 const max = slider ? parseFloat(slider.max) : 8.0;
                 const step = 0.1;
@@ -1716,10 +1829,38 @@ connectionInput.addEventListener('input', (event) => {
                 connectionFactor = nf;
                 connections.forEach(c => { c.connectionFactor = connectionFactor; });
                 if (slider) slider.value = String(connectionFactor);
+                if (input) input.value = String(connectionFactor);
                 const cv = document.getElementById('connectionValue');
                 if (cv) cv.textContent = (connectionFactor).toFixed(2);
                 updateDisplays();
+                try { saveSnapshot(); } catch (_) {}
                 draw();
+                return;
+            }
+
+            // Mejora: si hay selección de bolas, ajustar tamaños de todas sin necesidad de hover
+            if (selectedCircles.length > 0) {
+                const step = event.shiftKey ? 1 : 3; // Shift = ajuste fino
+                const deltaSize = delta * step;
+                selectedCircles.forEach(circle => {
+                    const newRadius = Math.max(0, Math.min(maxRadiusEffective, circle.radius + deltaSize));
+                    circle.radius = newRadius;
+                });
+                updateBallSizeDisplay();
+                try { saveSnapshot(); } catch (_) {}
+                draw();
+                return;
+            }
+
+            // Si no hay selección, permitir ajustar bola bajo el cursor
+            if (hoveredCircle) {
+                const step = event.shiftKey ? 1 : 3; // Shift = ajuste fino
+                const newRadius = Math.max(0, Math.min(maxRadiusEffective, hoveredCircle.radius + delta * step));
+                hoveredCircle.radius = newRadius;
+                updateBallSizeDisplay();
+                try { saveSnapshot(); } catch (_) {}
+                draw();
+                return;
             }
         });
         
@@ -1956,6 +2097,29 @@ connectionInput.addEventListener('input', (event) => {
         document.getElementById('savePreset').addEventListener('click', () => { try { savePreset(); } catch (_) {} });
         document.getElementById('loadPreset').addEventListener('click', () => { try { togglePresetsList(); } catch (_) {} });
         
+        const presetNameInput = document.getElementById('presetName');
+        const savePresetBtn = document.getElementById('savePreset');
+        if (presetNameInput && savePresetBtn) {
+            // Enter para guardar
+            presetNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && presetNameInput.value.trim()) {
+                    e.preventDefault();
+                    savePresetBtn.click();
+                }
+            });
+            
+            // Validación en tiempo real del nombre
+            presetNameInput.addEventListener('input', (e) => {
+                const name = e.target.value.trim();
+                savePresetBtn.disabled = !name;
+                savePresetBtn.title = name ? 'Guardar preset' : 'Ingresa un nombre';
+            });
+            
+            // Estado inicial
+            savePresetBtn.disabled = true;
+            savePresetBtn.title = 'Ingresa un nombre';
+        }
+        
         // Resize handler
         window.addEventListener('resize', () => {
             init();
@@ -2054,13 +2218,8 @@ connectionInput.addEventListener('input', (event) => {
           // Connection controls siempre visibles
           if (connectionControls) connectionControls.hidden = false;
 
-          // Mostrar slider de factor de conexión:
-          // - siempre en modo global
-          // - en modo individual sólo si hay conexiones seleccionadas
-          const showSlider =
-            connectionFactorMode === 'global' ||
-            (connectionFactorMode === 'individual' && selectedConnections.length > 0);
-          if (connectionSliderBlock) connectionSliderBlock.hidden = !showSlider;
+          // SIMPLIFIED: siempre mostrar slider ya que siempre estamos en modo individual
+          if (connectionSliderBlock) connectionSliderBlock.hidden = false;
         }
 
         // Modal de ayuda accesible
@@ -2083,23 +2242,7 @@ connectionInput.addEventListener('input', (event) => {
           }
         });
 
-        document.getElementById('globalMode').addEventListener('click', () => {
-          connectionFactorMode = 'global';
-          selectedConnections.forEach(c => c.isSelected = false);
-          selectedConnections = [];
-          document.getElementById('globalMode').classList.add('active');
-          document.getElementById('individualMode').classList.remove('active');
-          updateDisplays();
-          updateUIContext();
-          draw();
-        });
-        document.getElementById('individualMode').addEventListener('click', () => {
-          connectionFactorMode = 'individual';
-          document.getElementById('individualMode').classList.add('active');
-          document.getElementById('globalMode').classList.remove('active');
-          updateUIContext();
-          draw();
-        });
+
         // Llama también tras cada selección de conexión
         function updateSelectedConnectionsUI() {
           updateUIContext();
@@ -2109,6 +2252,41 @@ connectionInput.addEventListener('input', (event) => {
 
         // Llama al cargar
         updateUIContext();
+        
+        // Wire del input de porcentaje de tamaño
+        const ballSizeInputEl = document.getElementById('ballSizeIndicator');
+        if (ballSizeInputEl) {
+            // Aplicar valor en tiempo real (sin snapshot)
+            ballSizeInputEl.addEventListener('input', () => {
+                if (selectedCircles.length === 0) return;
+                const maxEff = Math.max(1, Number(maxRadiusEffective) || 1);
+                let v = Number(ballSizeInputEl.value);
+                if (Number.isNaN(v)) return;
+                v = Math.max(0, Math.min(100, v));
+                const newRadius = (v / 100) * maxEff;
+                selectedCircles.forEach(c => { c.radius = Math.max(0, Math.min(maxEff, newRadius)); });
+                updateBallSizeDisplay();
+                draw();
+            });
+            // Confirmar valor (snapshot) en change/Enter/blur
+            const commitSnapshot = () => { try { saveSnapshot(); } catch (_) {} };
+            ballSizeInputEl.addEventListener('change', commitSnapshot);
+            ballSizeInputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitSnapshot();
+                    ballSizeInputEl.blur();
+                }
+            });
+            ballSizeInputEl.addEventListener('blur', () => {
+                // Si el valor queda fuera de rango, normalizar y reflejar
+                let v = Number(ballSizeInputEl.value);
+                if (Number.isNaN(v)) v = 0;
+                v = Math.max(0, Math.min(100, v));
+                ballSizeInputEl.value = String(Math.round(v));
+                updateBallSizeDisplay();
+            });
+        }
         
         // Convierte secciones del panel en colapsables
         (function () {

@@ -288,6 +288,8 @@
     <div class="flex items-center gap-2 mt-1">
         <input id="diamondMaskToggle" type="checkbox" class="terminal-checkbox" aria-label="Activar máscara Rombo" />
         <span class="text-xs">Máscara Rombo</span>
+        <input id="gridLockToggle" type="checkbox" class="terminal-checkbox" aria-label="Bloquear cambios en el grid" />
+        <span class="text-xs" title="Bloquea tamaño y espaciado del grid">🔒 Grid</span>
     </div>
 </section>
 
@@ -408,6 +410,8 @@
         let maxRadiusEffective = 100;
         // Máscara Rombo (diamond)
         let diamondMask = false;
+        // Estado del candado de grid
+        let gridLocked = false;
         // Context menu state for shapes
         let contextTargetCircle = null;
         let contextShapeApplyList = [];
@@ -429,6 +433,7 @@
         const persistBlockedLocalToggle = document.getElementById('persistBlockedLocalToggle');
         const persistBlockedExportToggle = document.getElementById('persistBlockedExportToggle');
         const diamondMaskToggle = document.getElementById('diamondMaskToggle');
+        const gridLockToggle = document.getElementById('gridLockToggle');
         
         // Helpers de conexiones
         const findConnection = (a, b) => {
@@ -503,7 +508,7 @@
             }
         };
         // Defaults globales para funcionalidad (sin depender de UI)
-        let persistPrefs = { local: true, export: true, diamond: false };
+        let persistPrefs = { local: true, export: true, diamond: false, gridLock: false };
         const loadPersistPrefs = () => {
             if (window?.Services?.Persist?.loadPersistPrefs) {
                 persistPrefs = window.Services.Persist.loadPersistPrefs();
@@ -518,6 +523,7 @@
                         if (typeof obj?.local === 'boolean') persistPrefs.local = obj.local;
                         if (typeof obj?.export === 'boolean') persistPrefs.export = obj.export;
                         if (typeof obj?.diamond === 'boolean') persistPrefs.diamond = obj.diamond;
+                        if (typeof obj?.gridLock === 'boolean') persistPrefs.gridLock = obj.gridLock;
                     }
                 } catch (_) {}
             }
@@ -1295,7 +1301,9 @@
             if (persistBlockedLocalToggle) persistBlockedLocalToggle.checked = true; // Forzar siempre activo
             if (persistBlockedExportToggle) persistBlockedExportToggle.checked = true; // Forzar siempre activo
             if (diamondMaskToggle) diamondMaskToggle.checked = !!persistPrefs.diamond;
+            if (gridLockToggle) gridLockToggle.checked = !!persistPrefs.gridLock;
             diamondMask = !!persistPrefs.diamond;
+            gridLocked = !!persistPrefs.gridLock;
 
             // Rehidratar bloqueos desde localStorage si procede
             if (persistPrefs.local) {
@@ -1449,36 +1457,59 @@ if (persistBlockedExportToggle) {
 }
 
 // Toggle de máscara Rombo
-if (diamondMaskToggle) {
-    diamondMaskToggle.addEventListener('change', () => {
-        diamondMask = !!diamondMaskToggle.checked;
-        persistPrefs.diamond = diamondMask;
-        savePersistPrefs();
-        // Aplicar/retirar máscara afectando radios
-        if (diamondMask) {
-            for (const c of circles) {
-                if (isOutsideDiamond(c)) {
-                    c.radius = 0;
-                    c.isSelected = false;
+        if (diamondMaskToggle) {
+            diamondMaskToggle.addEventListener('change', () => {
+                diamondMask = !!diamondMaskToggle.checked;
+                persistPrefs.diamond = diamondMask;
+                savePersistPrefs();
+                
+                // Aplicar máscara inmediatamente
+                if (diamondMask) {
+                    for (const c of circles) { if (isOutsideDiamond(c)) c.radius = 0; }
+                } else {
+                    // Al desactivar, no restaurar radios automáticamente para evitar confusión
                 }
-            }
-        } else {
-            const restore = Math.min(baseRadius, maxRadiusEffective);
-            for (const c of circles) {
-                if (isOutsideDiamond(c) && c.radius === 0) {
-                    c.radius = restore;
-                }
-            }
+                updateDisplays();
+                draw();
+                try { saveSnapshot(); } catch (_) {}
+            });
         }
-        // Limpiar selección/estados inválidos
-        selectedCircles = selectedCircles.filter(c => c.radius > 0 && (!diamondMask || !isNodeMasked(c)));
-        circles.forEach(c => { if (diamondMask && isNodeMasked(c)) c.isSelected = false; });
-        if (connectingFrom && isNodeMasked(connectingFrom)) connectingFrom = null;
-        if (draggingFrom && isNodeMasked(draggingFrom)) { draggingFrom = null; isDraggingConnect = false; }
-        updateBallSizeDisplay();
-        updateSelectedInfo();
-        draw();
-        try { saveSnapshot(); } catch (_) {}
+
+// Toggle de candado de grid
+if (gridLockToggle) {
+    gridLockToggle.addEventListener('change', () => {
+        gridLocked = !!gridLockToggle.checked;
+        
+        // Cambiar estilo visual de inputs cuando están bloqueados
+        const gridRowsInput = document.getElementById('gridRowsInput');
+        const gridColsInput = document.getElementById('gridColsInput');
+        const gridSpacingSlider = document.getElementById('gridSpacingSlider');
+        const gridSpacingInput = document.getElementById('gridSpacingInput');
+        
+        const elements = [gridRowsInput, gridColsInput, gridSpacingSlider, gridSpacingInput];
+        elements.forEach(el => {
+            if (el) {
+                if (gridLocked) {
+                    el.style.opacity = '0.5';
+                    el.style.cursor = 'not-allowed';
+                    if (el.type === 'number') {
+                        el.setAttribute('readonly', 'true');
+                    } else if (el.type === 'range') {
+                        el.style.pointerEvents = 'none';
+                    }
+                } else {
+                    el.style.opacity = '1';
+                    el.style.cursor = '';
+                    if (el.type === 'number') {
+                        el.removeAttribute('readonly');
+                    } else if (el.type === 'range') {
+                        el.style.pointerEvents = '';
+                    }
+                }
+            }
+        });
+        
+        savePersistPrefs();
     });
 }
 
@@ -1601,6 +1632,10 @@ connectionInput.addEventListener('keydown', (e) => {
         ['gridRowsInput', 'gridColsInput'].forEach(id => {
             const el = document.getElementById(id);
             el.addEventListener('input', (event) => {
+                if (gridLocked) {
+                    event.preventDefault();
+                    return;
+                }
                 const newValue = parseInt(event.target.value);
                 if (newValue >= 3 && newValue <= 12) {
                     if (id === 'gridRowsInput') gridCountY = newValue;
@@ -1608,14 +1643,22 @@ connectionInput.addEventListener('keydown', (e) => {
                     init();
                 }
             });
-            el.addEventListener('change', () => { try { saveSnapshot(); } catch (_) {} });
+            el.addEventListener('change', () => { 
+                if (gridLocked) return;
+                try { saveSnapshot(); } catch (_) {} 
+            });
             el.addEventListener('keydown', (e) => {
+                if (gridLocked && e.key !== 'Tab' && e.key !== 'Escape') {
+                    e.preventDefault();
+                    return;
+                }
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     el.blur();
                 }
             });
             el.addEventListener('blur', () => {
+                if (gridLocked) return;
                 let v = parseInt(el.value);
                 if (Number.isNaN(v)) v = 5;
                 v = Math.max(3, Math.min(12, v));
@@ -1643,6 +1686,7 @@ connectionInput.addEventListener('keydown', (e) => {
             gridSpacingInput.value = String(DEFAULT_GRID_SPACING);
             
             const applySpacing = (val) => {
+                if (gridLocked) return;
                 const clamped = Math.max(GRID_SPACING_MIN, Math.min(GRID_SPACING_MAX, val));
                 spacing = clamped;
                 gridSpacingSlider.value = String(clamped);
@@ -1736,6 +1780,10 @@ connectionInput.addEventListener('keydown', (e) => {
                 const bracketRightPressed = (event.key === ']') || (event.code === 'BracketRight');
 
                 if (slider && input && (bracketLeftPressed || bracketRightPressed)) {
+                    if (gridLocked) {
+                        event.preventDefault();
+                        return;
+                    }
                     event.preventDefault();
                     const step = event.shiftKey ? 10 : 5;
                     const dir = bracketRightPressed ? +1 : -1;
@@ -1830,6 +1878,7 @@ connectionInput.addEventListener('keydown', (e) => {
 
             // Quick win: Alt + rueda => ajustar espaciado del grid (con HUD)
             if (event.altKey) {
+                if (gridLocked) return;
                 const slider = document.getElementById('gridSpacingSlider');
                 const input = document.getElementById('gridSpacingInput');
                 if (slider && input) {
@@ -2214,6 +2263,16 @@ connectionInput.addEventListener('keydown', (e) => {
         init();
         // Sincronizar controles con estado inicial
         syncControlsWithState();
+        
+        // Aplicar estado inicial del grid lock
+        if (gridLockToggle) {
+            gridLocked = !!gridLockToggle.checked;
+            // Trigger del change event para aplicar estilos iniciales
+            if (gridLocked) {
+                gridLockToggle.dispatchEvent(new Event('change'));
+            }
+        }
+        
         saveSnapshot();
         draw();
 
